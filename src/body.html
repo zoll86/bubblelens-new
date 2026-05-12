@@ -1,0 +1,457 @@
+<!-- 🔬 Diagnosztikai panel — fordítási folyamat valós idejű kijelzéséhez -->
+<div id="diag-panel" style="display:none;position:fixed;top:60px;left:8px;right:8px;z-index:99999;background:rgba(20,15,25,.95);border:2px solid var(--yel,#ffd166);border-radius:8px;padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;color:#ffd166;max-height:40vh;overflow-y:auto;line-height:1.4;box-shadow:0 6px 20px rgba(0,0,0,.6)">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;border-bottom:1px solid rgba(255,209,102,.3);padding-bottom:5px">
+    <strong style="color:#ffd166;font-size:11px">🔬 DIAGNÓZIS</strong>
+    <button onclick="document.getElementById('diag-panel').style.display='none'" style="margin-left:auto;background:none;border:none;color:#ffd166;cursor:pointer;font-size:14px;padding:0 4px">✕</button>
+  </div>
+  <div id="diag-content"></div>
+</div>
+<!-- ✨ Téma-függő háttér részecskék (canvas) -->
+<canvas id="particle-canvas"></canvas>
+
+<!-- HEADER -->
+<div id="hdr">
+  <div id="hdr-l">
+    <span style="font-size:1.2rem">📚</span>
+    <h1 id="hdr-title" onclick="goLib()">BUBBLELENS<span class="ver-tag">v2.40</span></h1>
+  </div>
+  <div id="hdr-r">
+    <button class="btn btn-gh" id="btn-back" onclick="goLib()" style="display:none">← KÖNYVTÁR</button>
+    <button class="btn btn-gh" id="btn-save" onclick="saveProject()" style="display:none">💾</button>
+    <button class="btn btn-gh" onclick="document.getElementById('proj-in').click()">📂</button>
+    <input type="file" id="proj-in" accept=".json,.kfp" style="display:none" onchange="if(this.files[0])loadProject(this.files[0])">
+    <button class="btn btn-gh" id="btn-theme" onclick="toggleTheme()" title="Téma váltás">🌙</button>
+    <button class="btn btn-gh" id="btn-cfg" onclick="toggleSetup()">⚙️</button>
+    <button class="btn btn-gh" id="btn-exit" onclick="confirmExit()" title="Mentés és kilépés" style="color:#ff6b6b">🚪</button>
+  </div>
+</div>
+
+<!-- SETUP -->
+<div id="setup">
+  <div class="sg" style="flex:1;min-width:180px">
+    <label class="sg-l">🔑 CLAUDE API KULCS</label>
+    <input class="sg-i" type="password" id="api-key" placeholder="sk-ant-api03-..." autocomplete="off" oninput="saveKey('kf_api_key',this.value)">
+    <span class="hint">Szerezd meg: <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></span>
+  </div>
+  <div class="sg" style="flex:1;min-width:180px">
+    <label class="sg-l">🟢 GEMINI API KULCS <small style="color:var(--mut);font-weight:normal">(opcionális, sokkal olcsóbb!)</small></label>
+    <input class="sg-i" type="password" id="gemini-api-key" placeholder="AIza..." autocomplete="off" oninput="saveKey('kf_gemini_key',this.value)">
+    <span class="hint">Szerezd meg INGYEN: <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a> — 1000 ingyenes kérés/nap a Flash-Lite-tal</span>
+  </div>
+  <div class="sg" style="min-width:160px">
+    <label class="sg-l">🤖 CLAUDE FORDÍTÁS</label>
+    <div class="mrow">
+      <div class="mbtn active" id="svc-claude" data-svc="claude" onclick="setSvc(this)">🤖 CLAUDE<small>~4 Ft/o</small></div>
+    </div>
+    <span class="hint" style="margin-top:4px;display:inline-block">A Google és DeepL eltávolítva — kizárólag Claude-ot használunk a buborékfelismeréshez és fordításhoz.</span>
+  </div>
+  <div class="sg">
+    <label class="sg-l">🤖 CLAUDE MODELL</label>
+    <div class="mrow">
+      <div class="mbtn" data-model="claude-haiku-4-5-20251001" onclick="setModel(this)">⚡ HAIKU<small>~0.3 Ft</small></div>
+      <div class="mbtn active" data-model="claude-sonnet-4-6" onclick="setModel(this)">⚖️ SONNET<small>~1 Ft</small></div>
+      <div class="mbtn" data-model="claude-opus-4-5-20251101" onclick="setModel(this)">🏆 OPUS<small>~7 Ft</small></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+      <button class="mbtn active" id="auto-opus-btn" onclick="this.classList.toggle('active',toggleAutoOpus())" title="Ha a választott modell nem talál szöveget egy oldalon, automatikusan újrapróbálja Opusszal">🎯 Opus-biztonsági háló: <span id="auto-opus-label">BE</span></button>
+      <span class="hint">Ha üres a találat → csendben újrapróbál Opusszal. Csak akkor fordít drágán, ha tényleg kell.</span>
+    </div>
+  </div>
+  <div class="sg" style="flex:1;min-width:280px">
+    <label class="sg-l">🎨 SZÍNTÉMA</label>
+    <div class="mrow" style="flex-wrap:wrap">
+      <div class="mbtn theme-btn" data-theme="sunset-dark" onclick="setTheme('sunset-dark')">🌅<small>Naplemente</small></div>
+      <div class="mbtn theme-btn" data-theme="ocean" onclick="setTheme('ocean')">🌊<small>Óceán</small></div>
+      <div class="mbtn theme-btn" data-theme="forest" onclick="setTheme('forest')">🌲<small>Erdő</small></div>
+      <div class="mbtn theme-btn" data-theme="violet" onclick="setTheme('violet')">🌌<small>Ibolya</small></div>
+      <div class="mbtn theme-btn" data-theme="coffee" onclick="setTheme('coffee')">☕<small>Kávéház</small></div>
+      <div class="mbtn theme-btn" data-theme="midnight" onclick="setTheme('midnight')">🌃<small>Éjfél</small></div>
+      <div class="mbtn theme-btn" data-theme="cyberpunk" onclick="setTheme('cyberpunk')">🎮<small>Cyberpunk</small></div>
+      <div class="mbtn theme-btn" data-theme="wine" onclick="setTheme('wine')">🍷<small>Bor</small></div>
+      <div class="mbtn theme-btn" data-theme="hellfire" onclick="setTheme('hellfire')">🔥<small>Pokoltűz</small></div>
+      <div class="mbtn theme-btn" data-theme="nordic" onclick="setTheme('nordic')">🌙<small>Nordikus</small></div>
+      <div class="mbtn theme-btn" data-theme="retro80" onclick="setTheme('retro80')">⚡<small>Retro 80s</small></div>
+      <div class="mbtn theme-btn" data-theme="terminal" onclick="setTheme('terminal')">💻<small>Terminál</small></div>
+      <div class="mbtn theme-btn" data-theme="halloween" onclick="setTheme('halloween')">🎃<small>Halloween</small></div>
+      <div class="mbtn theme-btn" data-theme="christmas" onclick="setTheme('christmas')">🎄<small>Karácsony</small></div>
+      <div class="mbtn theme-btn" data-theme="sunset-light" onclick="setTheme('sunset-light')">☀️<small>Barack</small></div>
+      <div class="mbtn theme-btn" data-theme="beach" onclick="setTheme('beach')">🏖️<small>Tengerpart</small></div>
+      <div class="mbtn theme-btn" data-theme="parchment" onclick="setTheme('parchment')">📜<small>Pergamen</small></div>
+      <div class="mbtn theme-btn" data-theme="mint" onclick="setTheme('mint')">🌿<small>Menta</small></div>
+      <div class="mbtn theme-btn" data-theme="cloud" onclick="setTheme('cloud')">☁️<small>Felhő</small></div>
+      <div class="mbtn theme-btn" data-theme="spring" onclick="setTheme('spring')">🌷<small>Tavasz</small></div>
+      <div class="mbtn theme-btn" data-theme="farm" onclick="setTheme('farm')">🌾<small>Mezőgazdaság</small></div>
+      <div class="mbtn theme-btn" data-theme="oldbook" onclick="setTheme('oldbook')">📔<small>Régi könyv</small></div>
+      <div class="mbtn theme-btn" data-theme="breakfast" onclick="setTheme('breakfast')">🥐<small>Reggeli</small></div>
+      <div class="mbtn theme-btn" data-theme="sepia" onclick="setTheme('sepia')">📖<small>Sepia</small></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+      <button class="mbtn" id="particles-btn" onclick="this.classList.toggle('active',toggleParticles())" title="Téma-függő háttér részecskék (havazás, csillagok, stb.)">✨ Háttér részecskék: <span id="particles-label">BE</span></button>
+      <span class="hint">Egyedi animáció minden témához. Akkumulátort fogyaszt — kikapcsolható.</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+      <button class="mbtn" onclick="regenerateAllThumbs()" title="Az összes cachelt könyv borítóját újrageneráljuk magas felbontásban">🔄 Borítók újragenerálása</button>
+      <button class="mbtn" onclick="diagToggle()" title="Be/ki: a fordítási folyamat valós idejű kijelzése a tableten">🔬 Diagnózis-panel</button>
+      <span class="hint">Csak a böngészőbe cachelt könyveknél működik. A többit külön kell megnyitnod.</span>
+    </div>
+    <!-- 🔤 OCR EXPORT / IMPORT — split pipeline: olcsó OCR + manuális fordítás -->
+    <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--brd);width:100%">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <button class="mbtn" style="color:var(--yel);border-color:rgba(255,209,102,.4)" onclick="exportOcrTxt()" title="Az aktuális könyv OCR-szövegét exportálja TXT-be — chatben (Claude.ai, ChatGPT) könnyen lefordítható">
+          🔤 OCR export TXT
+        </button>
+        <label class="mbtn" style="cursor:pointer;color:var(--teal);border-color:rgba(6,214,160,.4)" title="Importáld a magyar fordítást (TXT) amit chatben készítettél">
+          📥 Fordítás import (TXT)
+          <input type="file" id="ocr-trans-input" accept=".txt,text/plain" style="display:none" onchange="if(this.files.length)importOcrTrans(this.files[0])">
+        </label>
+        <span class="hint">Olcsó stratégia: Gemini Flash-Lite (csak OCR) + Claude.ai chat (ingyen fordít) → import vissza.</span>
+      </div>
+    </div>
+
+    <!-- 📖 LORE KÖNYVTÁR — a képregényekhez tartozó háttér-információk -->
+    <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--brd);width:100%">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <label class="mbtn" style="cursor:pointer;color:var(--teal);border-color:rgba(6,214,160,.4)" onclick="androidPickLoreMaybe(event)" title="JSON fájlból töltesz be lore-t (szereplők, idővonal, kapcsolatok)">
+          📖 Lore importálása
+          <input type="file" id="lore-file-input" accept=".json,application/json" multiple style="display:none" onchange="if(this.files.length)importLoreFiles(this.files)">
+        </label>
+        <span class="hint">Töltsd fel a képregényekhez készített JSON-okat. Az app automatikusan párosítja a címek alapján.</span>
+      </div>
+      <div id="lore-library"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+      <button class="mbtn active" id="prefetch-btn" onclick="this.classList.toggle('active',togglePrefetch())" title="A következő 2 lap automatikus fordítása háttérben — amikor odaérsz, azonnal kész">🧠 Előfordítás: <span id="prefetch-label">BE</span></button>
+      <span class="hint">Olvasás közben a következő 2 lapot előre lefordítja — azonnali megjelenés. API-költséget fogyaszt.</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:10px;border-top:1px dashed var(--brd)">
+      <button class="mbtn" onclick="confirmExit()" style="color:#ff6b6b;border-color:rgba(255,107,107,.4)" title="Minden adat mentése és a böngésző tab bezárása">🚪 Mentés és kilépés</button>
+      <span class="hint">Minden haladás és fordítás mentve, a tab bezárul.</span>
+    </div>
+  </div>
+</div>
+
+<!-- STATUS -->
+<div id="sb">
+  <div class="spin" id="sb-spin" style="display:none"></div>
+  <span id="sb-msg"></span>
+  <div id="pb-wrap"><div id="pb"></div></div>
+</div>
+
+<!-- ═══ KÖNYVTÁR KÉPERNYŐ ═══ -->
+<div id="library">
+  <!-- Statisztika panel (nyitható) -->
+  <div id="lib-stats" onclick="toggleStats()">
+    <div id="lib-stats-row" class="stats-short">
+      <span class="stats-text">📚 0 könyv · 📖 0 olvasás alatt · 📄 0 oldal fordítva</span>
+      <span class="stats-arrow">▼</span>
+    </div>
+    <div id="lib-stats-full" style="display:none">
+      <!-- ezt a JS tölti -->
+    </div>
+  </div>
+
+  <!-- 📖 FOLYTATÁS — nagy borító az utolsó olvasott könyvről -->
+  <div id="continue-hero">
+    <!-- a JS tölti dinamikusan -->
+  </div>
+
+  <!-- Lenyitható "Összes könyv" szekció -->
+  <div id="lib-section-toggle" onclick="toggleLibSection()">
+    <span class="lib-section-icon">📚</span>
+    <span class="lib-section-label">ÖSSZES KÖNYV</span>
+    <span class="lib-section-count" id="lib-section-count"></span>
+    <span class="lib-section-arrow">▼</span>
+  </div>
+
+  <div id="lib-section-content">
+    <!-- Toolbar -->
+    <div id="lib-toolbar">
+      <input type="search" id="lib-search" placeholder="🔍 Keresés címben..." oninput="filterLib(this.value)">
+      <select id="lib-sort" onchange="sortLib(this.value)">
+        <option value="smart">Okos (olvasás + A–Z)</option>
+        <option value="title">Cím (A–Z)</option>
+        <option value="recent">Utoljára olvasva</option>
+        <option value="progress">Haladás</option>
+      </select>
+      <label class="btn btn-acc" id="mappa-btn" style="cursor:pointer;font-size:.85rem;padding:6px 12px" title="Válassz egy mappát a képregényeiddel" onclick="androidPickFolderMaybe(event)">
+        📁 MAPPA
+        <input type="file" id="fi-dir" webkitdirectory directory multiple style="display:none" onchange="if(this.files.length)loadLibFromDir(this.files)">
+      </label>
+    </div>
+
+  <!-- Üres könyvtár üzenet -->
+  <div id="lib-empty" style="display:none">
+    <div class="os-logo">⚔️</div>
+    <div class="os-title">BUBBLELENS<span class="ver-tag-big">v2.40</span></div>
+    <div class="os-sub">— képregény fordító —</div>
+    <div class="os-btns">
+      <label class="btn btn-acc" id="mappa-btn-empty" style="cursor:pointer" onclick="androidPickFolderMaybe(event)">
+        📁 MAPPA VÁLASZTÁSA
+        <small>minden képregény a mappából listázódik</small>
+        <input type="file" webkitdirectory directory multiple style="display:none" onchange="if(this.files.length)loadLibFromDir(this.files)">
+      </label>
+      <button class="btn btn-gh" onclick="document.getElementById('proj-in').click()">
+        💾 PROJEKT BETÖLTÉSE
+        <small>.kfp.json</small>
+      </button>
+    </div>
+    <div class="hint" style="margin-top:16px;font-size:.78rem;color:var(--mut);text-align:center;max-width:320px">
+      💡 A választott mappa fájljai a böngésző memóriájában maradnak, amíg nem zárod be.<br>
+      A <b>haladás és fordítás</b> viszont elmentődik — újranyitáskor válaszd ki ugyanazt a mappát, a könyveid folytathatók.
+    </div>
+  </div>
+
+  <!-- Könyvtár lista (sorok) -->
+  <div id="lib-grid"></div>
+  </div><!-- /#lib-section-content -->
+</div>
+
+<!-- ═══ READER ═══ -->
+<div id="reader">
+  <div id="rmain">
+    <div class="navarr dis" id="nl" onclick="goPrev()">◀</div>
+    <div id="zvp">
+      <div id="iwrap">
+        <img id="cimg" src="" alt="" draggable="false" onload="updateIwrapMargin(this)">
+        <div id="blayer"><div id="lhandle" title="Húzd el az összes fordítást">⟺</div></div>
+        <div id="zhint">2× koppintás: zoom</div>
+      </div>
+    </div>
+    <div class="navarr dis" id="nr" onclick="goNext()">▶</div>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="rtb">
+    <div id="pctr"><span class="pf-dot" title="Előfordítás folyamatban"></span><span id="pctr-txt">1/1</span></div>
+    <div class="tsep"></div>
+    <button class="btn btn-acc" id="btn-trans" onclick="transCur()" style="font-size:.85rem;padding:6px 13px">🔍 FORDÍTÁS</button>
+    <button class="btn btn-blu" id="btn-transall" onclick="transAll()" style="font-size:.85rem;padding:6px 11px">📚 ÖSSZES</button>
+    <div class="tsep"></div>
+    <div class="slw">💬<input type="range" class="mini" id="op-sl" min="0" max="100" value="93" oninput="setOp(this.value)"><span id="op-v">93%</span></div>
+    <div class="tsep"></div>
+    <button class="btn btn-gh" id="ov-btn" onclick="toggleOverlays()" title="Overlay szöveg (kép felirat) ki/be">🖼️</button>
+    <button class="btn btn-gh" id="peek-btn" onclick="togglePeek()" title="Betekintő mód">👁</button>
+    <button class="btn btn-gh" id="rtl-btn" onclick="toggleRtl()" title="Manga jobbról-balra mód">🈷️ RTL</button>
+    <button class="btn btn-gh" onclick="document.getElementById('tstrip').classList.toggle('open')">⊞</button>
+    <button class="btn btn-gh" id="bsett-btn" onclick="document.getElementById('bsett').classList.toggle('open');this.classList.toggle('active',document.getElementById('bsett').classList.contains('open'))">💬</button>
+    <button class="btn btn-gh" id="imm-btn" onclick="toggleImm()">⛶</button>
+  </div>
+
+  <div id="tstrip"></div>
+
+  <div id="bsett">
+    <div class="bsg"><label>Betűtípus:</label>
+      <select class="bss" id="font-sel" onchange="setBFont(this.value)">
+        <option value="'Patrick Hand HU','Patrick Hand',sans-serif" selected>Patrick Hand ★</option>
+        <option value="'Bangers HU',cursive">Bangers ★</option>
+        <option value="'Fredoka HU',sans-serif">Fredoka ★</option>
+        <option value="'Caveat HU',cursive">Caveat ★</option>
+        <option value="'Comic Neue',cursive">Comic Neue</option>
+        <option value="'Permanent Marker',cursive">Marker</option>
+        <option value="'Nunito',sans-serif">Nunito</option>
+      </select>
+    </div>
+    <div class="bsg"><label>Betűméret:</label><input type="range" class="mini" id="fs-sl" min="50" max="150" value="100" oninput="setBFS(this.value)"><span id="fs-v">100%</span></div>
+    <div class="bsg"><label>Buborék:</label><input type="range" class="mini" id="bs-sl" min="40" max="100" value="100" oninput="setBSc(this.value)"><span id="bs-v">100%</span></div>
+    <div class="bsg" style="width:100%">
+      <button class="shbtn active" id="style-match-btn" onclick="toggleStyleMatch()" title="Buborék szín és betűtípus felismerés ki/be">🎨 Szín+Font matching: <span id="smb-label">BE</span></button>
+    </div>
+    <div class="bsg"><label>Forma:</label>
+      <div style="display:flex;gap:5px">
+        <button class="shbtn active" id="sh-rect" onclick="setShape('rect',this)">▬ Szögletes</button>
+        <button class="shbtn" id="sh-oval" onclick="setShape('oval',this)">⬭ Ovális</button>
+        <button class="shbtn" id="sh-round" onclick="setShape('round',this)">● Kör</button>
+      </div>
+    </div>
+  </div>
+
+  <button id="tptog" onclick="toggleTP()">▼ FORDÍTÁSI TÁBLÁZAT</button>
+  <div id="tpanel">
+    <div id="tph"><span id="tph-t">📋 FORDÍTÁSOK</span><button style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:.9rem" onclick="toggleTP()">✕</button></div>
+    <div id="trows"></div>
+  </div>
+</div>
+
+<!-- ═══ IMMERSIVE OVERLAYS ═══ -->
+
+<!-- Left icon column -->
+<div id="icol">
+  <!-- bottom = first (flex-direction:column-reverse reverses visual order) -->
+  <div class="icb" id="ib-delete" onclick="toggleDeleteMode()" title="Buborék törlése">🗑</div>
+  <div class="icb" id="ib-peek" onclick="togglePeek()" title="Betekintő mód">👁</div>
+  <div class="icb" id="ib-shape" onclick="togglePop('pop-shape','ib-shape')" title="Forma">○</div>
+  <div class="icb" id="ib-fsz" onclick="togglePop('pop-fsz','ib-fsz')" title="Betűméret">Aa</div>
+  <div class="icb" id="ib-explain" onclick="toggleExplainMode()" title="Magyarázat mód">💡</div>
+  <div class="icb" id="ib-lore" onclick="openLoreViewer()" title="Lore — szereplők, háttér" style="display:none">📖</div>
+  <div class="icb" id="ib-model" onclick="toggleModelPicker(event)" title="Modell választó (alap: Haiku)">H</div>
+  <div id="ib-trans" onclick="transCur()" title="Fordítás">🔍</div>
+  <div class="icb" id="ib-ui" onclick="toggleImm()" title="UI vissza / elrejt" style="margin-top:8px;font-size:1rem">⎌</div>
+</div>
+
+<!-- Modell-választó popup — három szekció: HIBRID, GEMINI, CLAUDE -->
+<div id="model-picker" style="display:none">
+  <div class="mp-section">🔀 HIBRID <small>(olcsó OCR + jó fordítás)</small></div>
+  <button class="mp-opt" data-model="hybrid-flashlite-sonnet" onclick="pickModel('hybrid-flashlite-sonnet')">
+    <span class="mp-letter h-letter">X</span>
+    <div><strong>Flash-Lite + Sonnet</strong><br><small>~50% spórolás, Sonnet-szintű ⭐</small></div>
+  </button>
+  <button class="mp-opt" data-model="hybrid-flashlite-haiku" onclick="pickModel('hybrid-flashlite-haiku')">
+    <span class="mp-letter h-letter">Y</span>
+    <div><strong>Flash-Lite + Haiku</strong><br><small>~70% spórolás, Haiku-fordítás</small></div>
+  </button>
+  <button class="mp-opt" data-model="hybrid-flash-sonnet" onclick="pickModel('hybrid-flash-sonnet')">
+    <span class="mp-letter h-letter">Z</span>
+    <div><strong>Flash + Sonnet</strong><br><small>jobb OCR (hosszú buborékokra) ~150 Ft/100 lap</small></div>
+  </button>
+  <button class="mp-opt" data-model="hybrid-flashlite-sonnet-x1" onclick="pickModel('hybrid-flashlite-sonnet-x1')">
+    <span class="mp-letter h-letter">W</span>
+    <div><strong>Flash-Lite + Sonnet (1 szelet)</strong><br><small>nincs darabolás → nincs vágási hiba</small></div>
+  </button>
+  <div class="mp-section">🎨 GEMINI <small>(Google)</small></div>
+  <button class="mp-opt" data-model="gemini-2.5-flash-lite" onclick="pickModel('gemini-2.5-flash-lite')">
+    <span class="mp-letter g-letter">G</span>
+    <div><strong>Flash-Lite</strong><br><small>szinte ingyen (~0.05¢/lap)</small></div>
+  </button>
+  <button class="mp-opt" data-model="gemini-2.5-flash" onclick="pickModel('gemini-2.5-flash')">
+    <span class="mp-letter g-letter">g</span>
+    <div><strong>Flash</strong><br><small>gyors, olcsó (~0.15¢/lap)</small></div>
+  </button>
+  <button class="mp-opt" data-model="gemini-2.5-pro" onclick="pickModel('gemini-2.5-pro')">
+    <span class="mp-letter g-letter">P</span>
+    <div><strong>Pro</strong><br><small>fizetős! (~1.5¢/lap)</small></div>
+  </button>
+  <div class="mp-section">🎨 CLAUDE <small>(Anthropic)</small></div>
+  <button class="mp-opt" data-model="claude-haiku-4-5" onclick="pickModel('claude-haiku-4-5')">
+    <span class="mp-letter">H</span>
+    <div><strong>Haiku</strong><br><small>gyors · olcsó (~0.5¢/lap)</small></div>
+  </button>
+  <button class="mp-opt" data-model="claude-sonnet-4-6" onclick="pickModel('claude-sonnet-4-6')">
+    <span class="mp-letter">S</span>
+    <div><strong>Sonnet</strong><br><small>kiegyensúlyozott (~3¢/lap)</small></div>
+  </button>
+  <button class="mp-opt" data-model="claude-opus-4-5-20251101" onclick="pickModel('claude-opus-4-5-20251101')">
+    <span class="mp-letter">O</span>
+    <div><strong>Opus</strong><br><small>legjobb · drága (~15¢/lap)</small></div>
+  </button>
+</div>
+
+<!-- Immerzív progress bar (csak imm módban látszik, a képernyő alján) -->
+<div id="imm-progress" onclick="immProgressJump(event)">
+  <div id="imm-progress-fill"></div>
+</div>
+
+<!-- 🟡 Immerzív mód: előfordítás jelző (csak ha prefetch fut) -->
+<div id="imm-prefetch-dot" title="Előfordítás folyamatban"></div>
+
+<!-- Right column: page counter + exit -->
+<div id="rcol">
+  <div id="imm-exit" onclick="toggleImm()">✕ KILÉPÉS</div>
+  <div id="imm-pctr" onclick="toggleJump()">1 / 1</div>
+  <div id="imm-jump">
+    <span class="imm-jump-hint" style="font-size:.65rem;font-family:monospace;color:var(--mut)">Ugrás oldalra:</span>
+    <input id="jump-input" type="number" min="1" placeholder="oldal" onkeydown="if(event.key==='Enter')doJump()">
+    <div class="jbtns">
+      <button class="btn btn-acc" style="font-size:.8rem;padding:5px 12px" onclick="doJump()">UGRÁS</button>
+      <button class="btn btn-gh" style="font-size:.8rem;padding:5px 10px" onclick="toggleJump()">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- Magyarázat pop-up (középen lebegő panel) -->
+<div id="explain-popup">
+  <div id="explain-head">
+    <span>💡 MAGYARÁZAT</span>
+    <button onclick="closeExplain()" title="Bezár">✕</button>
+  </div>
+  <div id="explain-body">
+    <div id="explain-orig" class="explain-quote"></div>
+    <div id="explain-content"></div>
+  </div>
+</div>
+
+<!-- 🗑 Buborék-törlés megerősítő popup -->
+<div id="delete-popup">
+  <div class="dp-head">
+    <span>🗑</span>
+    <span>BUBORÉK TÖRLÉSE</span>
+  </div>
+  <div class="dp-body">
+    <div class="dp-row">
+      <div class="dp-lbl">Eredeti</div>
+      <div class="dp-orig" id="dp-orig"></div>
+    </div>
+    <div class="dp-row">
+      <div class="dp-lbl">Fordítás</div>
+      <div class="dp-hu" id="dp-hu"></div>
+    </div>
+  </div>
+  <div class="dp-actions">
+    <button class="dp-no" onclick="closeDeletePopup()">✕ Mégse</button>
+    <button class="dp-yes" onclick="confirmBubbleDelete()">🗑 Törlöm</button>
+  </div>
+</div>
+
+<!-- 📖 LORE popup — a képregényhez tartozó háttér-információ -->
+<div id="lore-popup">
+  <div id="lore-head">
+    <div class="lore-head-title">
+      <span>📖</span>
+      <span id="lore-title">Lore</span>
+    </div>
+    <button onclick="closeLoreViewer()" title="Bezár és vissza a képregényhez">✕</button>
+  </div>
+  <div id="lore-tabs">
+    <button class="lore-tab active" data-tab="meta" onclick="switchLoreTab('meta')">📋 Alap</button>
+    <button class="lore-tab" data-tab="chars" onclick="switchLoreTab('chars')">👥 Szereplők</button>
+    <button class="lore-tab" data-tab="rel" onclick="switchLoreTab('rel')">🔗 Kapcsolatok</button>
+    <button class="lore-tab" data-tab="timeline" onclick="switchLoreTab('timeline')">⏳ Idővonal</button>
+    <button class="lore-tab" data-tab="origin" onclick="switchLoreTab('origin')">🎬 Háttér</button>
+  </div>
+  <div id="lore-body">
+    <!-- Tartalom dinamikusan generálva -->
+  </div>
+</div>
+
+<!-- Popup panels -->
+<div class="ipop" id="pop-fsz">
+  <div class="ipop-row">
+    <span class="ipop-lbl">Aa</span>
+    <input type="range" class="ipop-range" id="ip-fs" min="50" max="150" value="100"
+      oninput="setBFS(this.value);syncSlider('fs-sl',this.value);document.getElementById('ip-fs-v').textContent=this.value+'%'">
+    <span class="ipop-val" id="ip-fs-v">100%</span>
+  </div>
+</div>
+<div class="ipop" id="pop-bsz">
+  <div class="ipop-row">
+    <span class="ipop-lbl">⬜</span>
+    <input type="range" class="ipop-range" id="ip-bs" min="40" max="100" value="100"
+      oninput="setBSc(this.value);syncSlider('bs-sl',this.value);document.getElementById('ip-bs-v').textContent=this.value+'%'">
+    <span class="ipop-val" id="ip-bs-v">100%</span>
+  </div>
+</div>
+<div class="ipop" id="pop-op">
+  <div class="ipop-row">
+    <span class="ipop-lbl">◑</span>
+    <input type="range" class="ipop-range" id="ip-op" min="0" max="100" value="93"
+      oninput="setOp(this.value);syncSlider('op-sl',this.value);document.getElementById('ip-op-v').textContent=this.value+'%'">
+    <span class="ipop-val" id="ip-op-v">93%</span>
+  </div>
+</div>
+<div class="ipop" id="pop-shape">
+  <div style="display:flex;gap:6px">
+    <button class="ishbtn active" id="ish-rect" onclick="setShape('rect',this);syncShapes('rect')">▬</button>
+    <button class="ishbtn" id="ish-oval" onclick="setShape('oval',this);syncShapes('oval')">⬭</button>
+    <button class="ishbtn" id="ish-round" onclick="setShape('round',this);syncShapes('round')">●</button>
+  </div>
+</div>
+<div class="ipop" id="pop-font">
+  <select class="ipop-sel" id="ip-font-sel" onchange="setBFont(this.value);document.getElementById('font-sel').value=this.value">
+    <option value="'Patrick Hand HU','Patrick Hand',sans-serif" selected>Patrick Hand ★</option>
+    <option value="'Bangers HU',cursive">Bangers ★</option>
+    <option value="'Fredoka HU',sans-serif">Fredoka ★</option>
+    <option value="'Caveat HU',cursive">Caveat ★</option>
+    <option value="'Comic Neue',cursive">Comic Neue</option>
+    <option value="'Permanent Marker',cursive">Marker</option>
+    <option value="'Nunito',sans-serif">Nunito</option>
+  </select>
+</div>
